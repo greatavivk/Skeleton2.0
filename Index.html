@@ -1,1 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>YouTube Search Player</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --bg: #f2f5f9;
+            --surface: #ffffff;
+            --surface-muted: #f8fafc;
+            --text: #0f172a;
+            --muted: #475569;
+            --primary: #ff0000;
+            --primary-dark: #c40000;
+            --success: #0d9488;
+            --error: #c53030;
+            --border-radius: 16px;
+            --shadow: 0 22px 45px rgba(15, 23, 42, 0.12);
+        }
 
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
+
+        .app-header {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 245, 249, 0.92) 100%);
+            backdrop-filter: blur(12px);
+            padding: clamp(1.5rem, 3vw, 2.75rem) clamp(1.25rem, 5vw, 3.25rem) clamp(1.75rem, 3vw, 3rem);
+            box-shadow: 0 1px 0 rgba(15, 23, 42, 0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-inner {
+            margin: 0 auto;
+            max-width: 1100px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(2rem, 3vw, 2.6rem);
+            letter-spacing: -0.02em;
+        }
+
+        .header-subtitle {
+            margin: 0.5rem 0 0;
+            max-width: 700px;
+            color: var(--muted);
+            font-size: 1.05rem;
+        }
+
+        .key-card,
+        .search-card,
+        .player-card {
+            background: var(--surface);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: clamp(1.5rem, 3vw, 2rem);
+        }
+
+        .key-card {
+            margin-top: clamp(1.25rem, 3vw, 2rem);
+            display: grid;
+            gap: 1rem;
+        }
+
+        form {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .key-form-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: flex-end;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 0.35rem;
+        }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        input[type="password"],
+        input[type="search"] {
+            flex: 1 1 280px;
+            padding: 0.85rem 1rem;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.7);
+            font-size: 1rem;
+            background: var(--surface-muted);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        input[type="password"]:focus,
+        input[type="search"]:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(255, 0, 0, 0.18);
+            background: #fff;
+        }
+
+        button {
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 0.85rem 1.6rem;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .primary-btn {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 18px 32px rgba(239, 68, 68, 0.25);
+        }
+
+        .primary-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            background: var(--primary-dark);
+            box-shadow: 0 20px 36px rgba(239, 68, 68, 0.3);
+        }
+
+        .primary-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .ghost-btn {
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid rgba(148, 163, 184, 0.7);
+        }
+
+        .ghost-btn:hover:not(:disabled) {
+            color: var(--primary-dark);
+            border-color: var(--primary);
+            transform: translateY(-1px);
+        }
+
+        .ghost-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin: 0;
+            font-size: 0.95rem;
+            color: var(--muted);
+        }
+
+        .status--success {
+            color: var(--success);
+        }
+
+        .status--error {
+            color: var(--error);
+        }
+
+        .app-main {
+            padding: clamp(1.75rem, 4vw, 3rem) clamp(1.25rem, 5vw, 3.25rem) clamp(3rem, 6vw, 4rem);
+            max-width: 1100px;
+            margin: 0 auto;
+            display: grid;
+            gap: clamp(1.5rem, 3vw, 2.75rem);
+        }
+
+        .search-card form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.85rem;
+            align-items: flex-end;
+        }
+
+        .field {
+            flex: 1 1 320px;
+            min-width: 220px;
+        }
+
+        .results-section {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .results-grid {
+            display: grid;
+            gap: 1.25rem;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        }
+
+        .video-card {
+            display: grid;
+            gap: 0;
+            padding: 0;
+            background: var(--surface);
+            border-radius: 14px;
+            overflow: hidden;
+            text-align: left;
+            border: 1px solid transparent;
+            transition: transform 0.18s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .video-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 18px 30px rgba(15, 23, 42, 0.16);
+        }
+
+        .video-card:focus-visible {
+            outline: 3px solid rgba(255, 0, 0, 0.5);
+            outline-offset: 4px;
+        }
+
+        .video-card img {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            display: block;
+        }
+
+        .video-content {
+            padding: 1rem 1.1rem 1.1rem;
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .video-title {
+            margin: 0;
+            font-size: 1.05rem;
+            line-height: 1.35;
+        }
+
+        .video-channel,
+        .video-date {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        .video-card.is-selected {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(255, 0, 0, 0.18);
+        }
+
+        .player-frame-wrapper {
+            width: 100%;
+        }
+
+        .player-frame {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            border: none;
+            border-radius: 14px;
+            background: #000;
+        }
+
+        .player-hint {
+            margin: 0.75rem 0 0;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        @media (max-width: 720px) {
+            .key-form-grid,
+            .search-card form,
+            .actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            button,
+            .ghost-btn {
+                width: 100%;
+            }
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                color-scheme: dark;
+                --bg: #0f172a;
+                --surface: #0b1220;
+                --surface-muted: #111a2e;
+                --text: #e2e8f0;
+                --muted: #94a3b8;
+                --shadow: 0 22px 45px rgba(8, 15, 31, 0.6);
+            }
+
+            .app-header {
+                background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(15, 23, 42, 0.7) 100%);
+                box-shadow: 0 1px 0 rgba(148, 163, 184, 0.25);
+            }
+
+            input[type="password"],
+            input[type="search"] {
+                border-color: rgba(148, 163, 184, 0.4);
+            }
+
+            .video-card:hover {
+                box-shadow: 0 18px 30px rgba(8, 15, 31, 0.7);
+            }
+
+            .player-card,
+            .key-card,
+            .search-card {
+                box-shadow: 0 18px 40px rgba(8, 15, 31, 0.65);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-inner">
+            <h1>YouTube Search Player</h1>
+            <p class="header-subtitle">Bring your own YouTube Data API key to search and play videos directly in your browser. The key never leaves this page.</p>
+            <section class="key-card" aria-labelledby="api-key-heading">
+                <h2 id="api-key-heading" class="visually-hidden">API key</h2>
+                <form id="api-key-form" autocomplete="off">
+                    <div class="key-form-grid">
+                        <div class="field">
+                            <label for="api-key-input">YouTube Data API key</label>
+                            <input id="api-key-input" type="password" name="apiKey" placeholder="Paste your key here" required autocomplete="off">
+                        </div>
+                        <div class="actions">
+                            <button id="save-key-button" class="primary-btn" type="submit">Save key</button>
+                            <button id="clear-key-button" class="ghost-btn" type="button">Forget key</button>
+                        </div>
+                    </div>
+                </form>
+                <p class="status" id="key-status">Paste your API key above to enable the search experience.</p>
+            </section>
+        </div>
+    </header>
+    <main class="app-main">
+        <section class="search-card" aria-labelledby="search-heading">
+            <h2 id="search-heading" class="visually-hidden">Search YouTube</h2>
+            <form id="search-form" autocomplete="off">
+                <div class="field">
+                    <label for="search-input">Search query</label>
+                    <input id="search-input" type="search" name="query" placeholder="Search for videos" autocomplete="off" disabled required>
+                </div>
+                <button id="search-button" class="primary-btn" type="submit" disabled>Search</button>
+            </form>
+            <p class="status" id="search-status" role="status" aria-live="polite">Enter your API key to enable search.</p>
+        </section>
+        <section class="results-section" aria-label="Search results">
+            <div class="results-grid" id="results" aria-live="polite"></div>
+        </section>
+        <section class="player-card" aria-labelledby="player-heading">
+            <h2 id="player-heading" class="visually-hidden">Video player</h2>
+            <div class="player-frame-wrapper">
+                <iframe
+                    id="player"
+                    class="player-frame"
+                    title="YouTube video player"
+                    src=""
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowfullscreen>
+                </iframe>
+            </div>
+            <p class="player-hint" id="player-hint">Search for a video and choose a result to start playing. The player supports fullscreen mode.</p>
+        </section>
+    </main>
+    <script>
+        (function () {
+            const KEY_STORAGE_KEY = 'ytSearchPlayer.apiKey';
+
+            const apiKeyForm = document.getElementById('api-key-form');
+            const apiKeyInput = document.getElementById('api-key-input');
+            const clearKeyButton = document.getElementById('clear-key-button');
+
+            const keyStatus = document.getElementById('key-status');
+
+            const searchForm = document.getElementById('search-form');
+            const searchInput = document.getElementById('search-input');
+            const searchButton = document.getElementById('search-button');
+            const searchStatus = document.getElementById('search-status');
+
+            const resultsContainer = document.getElementById('results');
+            const playerFrame = document.getElementById('player');
+            const playerHint = document.getElementById('player-hint');
+
+            let sessionApiKey = '';
+            let activeCard = null;
+            let inFlightController = null;
+
+            const STATUS_TONES = ['status--error', 'status--success'];
+
+            const applyStatusTone = (element, tone) => {
+                STATUS_TONES.forEach((cls) => element.classList.remove(cls));
+                if (tone === 'error') {
+                    element.classList.add('status--error');
+                } else if (tone === 'success') {
+                    element.classList.add('status--success');
+                }
+            };
+
+            const setKeyStatus = (message, tone = 'info') => {
+                keyStatus.textContent = message;
+                applyStatusTone(keyStatus, tone);
+            };
+
+            const setSearchStatus = (message, tone = 'info') => {
+                searchStatus.textContent = message;
+                applyStatusTone(searchStatus, tone);
+            };
+
+            const readStoredKey = () => {
+                try {
+                    return sessionStorage.getItem(KEY_STORAGE_KEY) || '';
+                } catch (error) {
+                    console.warn('Unable to access sessionStorage.', error);
+                    return '';
+                }
+            };
+
+            const writeStoredKey = (value) => {
+                try {
+                    if (value) {
+                        sessionStorage.setItem(KEY_STORAGE_KEY, value);
+                    } else {
+                        sessionStorage.removeItem(KEY_STORAGE_KEY);
+                    }
+                } catch (error) {
+                    console.warn('Unable to access sessionStorage.', error);
+                }
+            };
+
+            const updateClearKeyState = () => {
+                clearKeyButton.disabled = !sessionApiKey;
+            };
+
+            const resetPlayer = () => {
+                playerFrame.src = '';
+                playerHint.textContent = 'Search for a video and choose a result to start playing. The player supports fullscreen mode.';
+            };
+
+            const clearResults = () => {
+                resultsContainer.innerHTML = '';
+                if (activeCard) {
+                    activeCard.classList.remove('is-selected');
+                    activeCard = null;
+                }
+            };
+
+            const toggleSearchEnabled = (enabled, options = {}) => {
+                const focus = options.focus ?? true;
+                searchInput.disabled = !enabled;
+                if (!enabled) {
+                    searchInput.value = '';
+                }
+                if (enabled && focus) {
+                    searchInput.focus();
+                }
+                updateSearchButtonState();
+            };
+
+            const updateSearchButtonState = () => {
+                const hasQuery = Boolean(searchInput.value.trim());
+                const busy = Boolean(inFlightController);
+                searchButton.disabled = !sessionApiKey || !hasQuery || busy;
+            };
+
+            const setSearchInProgress = (inProgress) => {
+                if (inProgress) {
+                    searchButton.textContent = 'Searching…';
+                    searchButton.disabled = true;
+                } else {
+                    searchButton.textContent = 'Search';
+                    updateSearchButtonState();
+                }
+            };
+
+            const formatDate = (isoDate) => {
+                if (!isoDate) {
+                    return '';
+                }
+                const parsed = new Date(isoDate);
+                if (Number.isNaN(parsed.getTime())) {
+                    return '';
+                }
+                return parsed.toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            };
+
+            const loadVideo = (videoId, title) => {
+                if (!videoId) {
+                    return;
+                }
+                const embedUrl = new URL(`https://www.youtube.com/embed/${encodeURIComponent(videoId)}`);
+                embedUrl.searchParams.set('rel', '0');
+                embedUrl.searchParams.set('modestbranding', '1');
+                embedUrl.searchParams.set('autoplay', '1');
+                embedUrl.searchParams.set('playsinline', '1');
+
+                playerFrame.src = embedUrl.toString();
+                playerHint.textContent = title ? `Now playing: ${title}` : 'Now playing the selected video.';
+
+                if (typeof playerFrame.focus === 'function') {
+                    try {
+                        playerFrame.focus({ preventScroll: true });
+                    } catch (error) {
+                        playerFrame.focus();
+                    }
+                }
+            };
+
+            const buildVideoCard = (item) => {
+                const videoId = item?.id?.videoId;
+                if (!videoId) {
+                    return null;
+                }
+
+                const snippet = item.snippet || {};
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'video-card';
+                card.dataset.videoId = videoId;
+
+                const thumbnailUrl =
+                    snippet?.thumbnails?.high?.url ||
+                    snippet?.thumbnails?.medium?.url ||
+                    snippet?.thumbnails?.default?.url ||
+                    '';
+
+                const thumbnail = document.createElement('img');
+                thumbnail.className = 'video-thumb';
+                thumbnail.src = thumbnailUrl;
+                thumbnail.alt = snippet.title ? `Thumbnail for ${snippet.title}` : 'Video thumbnail';
+
+                const content = document.createElement('div');
+                content.className = 'video-content';
+
+                const titleEl = document.createElement('h3');
+                titleEl.className = 'video-title';
+                titleEl.textContent = snippet.title || 'Untitled video';
+
+                const channelEl = document.createElement('p');
+                channelEl.className = 'video-channel';
+                channelEl.textContent = snippet.channelTitle ? `Channel · ${snippet.channelTitle}` : 'Channel information unavailable';
+
+                content.append(titleEl, channelEl);
+
+                const publishedAt = formatDate(snippet.publishedAt);
+                if (publishedAt) {
+                    const dateEl = document.createElement('p');
+                    dateEl.className = 'video-date';
+                    dateEl.textContent = `Published · ${publishedAt}`;
+                    content.append(dateEl);
+                }
+
+                card.append(thumbnail, content);
+
+                card.addEventListener('click', () => {
+                    if (activeCard) {
+                        activeCard.classList.remove('is-selected');
+                    }
+                    card.classList.add('is-selected');
+                    activeCard = card;
+                    loadVideo(videoId, snippet.title);
+                    try {
+                        playerFrame.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    } catch (error) {
+                        playerFrame.scrollIntoView();
+                    }
+                });
+
+                return card;
+            };
+
+            const searchYouTube = async (query) => {
+                if (!sessionApiKey) {
+                    setKeyStatus('Enter your API key first.', 'error');
+                    return;
+                }
+
+                if (inFlightController) {
+                    inFlightController.abort();
+                }
+
+                clearResults();
+
+                const controller = new AbortController();
+                inFlightController = controller;
+
+                setSearchInProgress(true);
+                setSearchStatus(`Searching YouTube for "${query}"…`);
+
+                const params = new URLSearchParams({
+                    key: sessionApiKey,
+                    part: 'snippet',
+                    type: 'video',
+                    q: query,
+                    maxResults: '12',
+                    videoEmbeddable: 'true',
+                    fields: 'items(id/videoId,snippet(title,channelTitle,publishedAt,thumbnails(high,medium,default)))'
+                });
+
+                try {
+                    const response = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`, {
+                        signal: controller.signal
+                    });
+
+                    if (!response.ok) {
+                        let message = `Search failed with status ${response.status}.`;
+                        try {
+                            const errorPayload = await response.json();
+                            if (errorPayload?.error?.message) {
+                                message = errorPayload.error.message;
+                            }
+                        } catch (error) {
+                            // Ignore JSON parsing failures for error bodies
+                        }
+                        throw new Error(message);
+                    }
+
+                    const payload = await response.json();
+                    const items = Array.isArray(payload.items) ? payload.items : [];
+
+                    if (!items.length) {
+                        setSearchStatus('No results found. Try another query.', 'error');
+                        return;
+                    }
+
+                    const fragment = document.createDocumentFragment();
+                    items.forEach((item) => {
+                        const card = buildVideoCard(item);
+                        if (card) {
+                            fragment.append(card);
+                        }
+                    });
+
+                    if (!fragment.childElementCount) {
+                        setSearchStatus('No embeddable videos were returned for this search. Try another query.', 'error');
+                        return;
+                    }
+
+                    resultsContainer.append(fragment);
+                    setSearchStatus(`Showing ${fragment.childElementCount} result(s). Choose a video to play.`, 'success');
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        return;
+                    }
+                    console.error(error);
+                    setSearchStatus(error.message || 'Something went wrong while searching YouTube.', 'error');
+                } finally {
+                    if (inFlightController === controller) {
+                        inFlightController = null;
+                        setSearchInProgress(false);
+                        updateSearchButtonState();
+                    }
+                }
+            };
+
+            apiKeyForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const key = apiKeyInput.value.trim();
+                if (!key) {
+                    setKeyStatus('Please provide a valid API key before saving.', 'error');
+                    apiKeyInput.focus();
+                    return;
+                }
+
+                const wasDifferent = sessionApiKey !== key;
+                sessionApiKey = key;
+                writeStoredKey(key);
+                apiKeyInput.value = '';
+
+                setKeyStatus('API key stored for this tab. You can start searching now.', 'success');
+                setSearchStatus('Enter a search query to see results.');
+                toggleSearchEnabled(true, { focus: true });
+                updateClearKeyState();
+
+                if (wasDifferent) {
+                    if (inFlightController) {
+                        inFlightController.abort();
+                        inFlightController = null;
+                    }
+                    setSearchInProgress(false);
+                    clearResults();
+                    resetPlayer();
+                }
+            });
+
+            clearKeyButton.addEventListener('click', () => {
+                if (!sessionApiKey) {
+                    apiKeyInput.focus();
+                    return;
+                }
+
+                if (inFlightController) {
+                    inFlightController.abort();
+                    inFlightController = null;
+                }
+
+                sessionApiKey = '';
+                writeStoredKey('');
+
+                setSearchInProgress(false);
+                toggleSearchEnabled(false);
+                updateClearKeyState();
+                setKeyStatus('API key cleared. Paste a new key to continue.', 'info');
+                setSearchStatus('Enter your API key to enable search.');
+                clearResults();
+                resetPlayer();
+                apiKeyInput.focus();
+            });
+
+            searchForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                if (!sessionApiKey) {
+                    setKeyStatus('Enter your API key first.', 'error');
+                    apiKeyInput.focus();
+                    return;
+                }
+
+                const query = searchInput.value.trim();
+                if (!query) {
+                    setSearchStatus('Type something to search for.', 'error');
+                    searchInput.focus();
+                    return;
+                }
+
+                searchYouTube(query);
+            });
+
+            searchInput.addEventListener('input', updateSearchButtonState);
+
+            const restoreKey = () => {
+                const stored = readStoredKey();
+                if (stored) {
+                    sessionApiKey = stored;
+                    setKeyStatus('Using the API key saved for this tab. You can search right away.', 'success');
+                    toggleSearchEnabled(true, { focus: false });
+                    setSearchStatus('Enter a search query to see results.');
+                } else {
+                    sessionApiKey = '';
+                    toggleSearchEnabled(false, { focus: false });
+                    setKeyStatus('Paste your API key above to enable the search experience.');
+                    setSearchStatus('Enter your API key to enable search.');
+                }
+                updateClearKeyState();
+            };
+
+            restoreKey();
+        })();
+    </script>
+</body>
+</html>
