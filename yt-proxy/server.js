@@ -9,13 +9,12 @@ dotenv.config();
 const app = express();
 const allowedOrigin = process.env.ALLOWED_ORIGIN;
 const apiKey = process.env.YT_API_KEY;
-const port = process.env.PORT || 3000;
+const port = Number(process.env.PORT) || 3000;
 
 const allowedResources = new Set(['search', 'videos', 'channels', 'playlists']);
 
 const safeParams = {
-  search: [
-    'part',
+  search: new Set([
     'channelId',
     'channelType',
     'eventType',
@@ -28,6 +27,7 @@ const safeParams = {
     'onBehalfOfContentOwner',
     'order',
     'pageToken',
+    'part',
     'publishedAfter',
     'publishedBefore',
     'q',
@@ -47,9 +47,8 @@ const safeParams = {
     'videoSyndicated',
     'videoType',
     'fields'
-  ],
-  videos: [
-    'part',
+  ]),
+  videos: new Set([
     'chart',
     'hl',
     'id',
@@ -59,13 +58,14 @@ const safeParams = {
     'maxWidth',
     'myRating',
     'pageToken',
+    'part',
     'regionCode',
     'videoCategoryId',
     'fields'
-  ],
-  channels: [
-    'part',
+  ]),
+  channels: new Set([
     'categoryId',
+    'fields',
     'forUsername',
     'hl',
     'id',
@@ -76,24 +76,23 @@ const safeParams = {
     'mySubscribers',
     'onBehalfOfContentOwner',
     'pageToken',
-    'fields'
-  ],
-  playlists: [
-    'part',
+    'part'
+  ]),
+  playlists: new Set([
     'channelId',
+    'fields',
     'hl',
     'id',
     'maxResults',
     'mine',
     'onBehalfOfContentOwner',
     'pageToken',
-    'fields'
-  ]
+    'part'
+  ])
 };
 
 app.use(helmet());
 app.use(morgan('combined'));
-app.use(express.json());
 
 app.use((req, res, next) => {
   if (!allowedOrigin) {
@@ -138,19 +137,25 @@ app.get('/api/yt/:resource', async (req, res) => {
   }
 
   const params = new URLSearchParams();
-  const allowed = safeParams[resource];
+  const allowedParams = safeParams[resource];
+  let forwardedParamCount = 0;
 
   for (const [key, value] of Object.entries(req.query)) {
-    if (!allowed.includes(key)) {
+    if (!allowedParams.has(key)) {
       continue;
     }
 
     const values = Array.isArray(value) ? value : [value];
     for (const item of values) {
-      if (typeof item === 'string') {
+      if (typeof item === 'string' && item.length > 0) {
         params.append(key, item);
+        forwardedParamCount += 1;
       }
     }
+  }
+
+  if (forwardedParamCount === 0) {
+    return res.status(400).json({ error: 'No allowed query parameters provided' });
   }
 
   params.set('key', apiKey);
@@ -165,7 +170,15 @@ app.get('/api/yt/:resource', async (req, res) => {
       headers: { Accept: 'application/json' }
     });
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      return res
+        .status(502)
+        .json({ error: 'Invalid JSON response from YouTube API', details: parseError.message });
+    }
+
     res.status(response.status).json(data);
   } catch (error) {
     res.status(500).json({ error: 'Failed to reach YouTube API', details: error.message });

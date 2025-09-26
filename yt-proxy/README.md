@@ -11,6 +11,8 @@ YT_API_KEY=your-key-here node server.js
 
 By default the server listens on port `3000`. Configure `ALLOWED_ORIGIN` to restrict browser access and `PORT` to customize the listener port.
 
+If you update dependencies, re-run `npm install` (or `npm install --package-lock-only`) so `package-lock.json` stays in sync for deployments.
+
 ## Deployment on Render
 
 - **Build command:** `npm ci`
