@@ -161,9 +161,7 @@ app.get('/api/yt/:resource', async (req, res) => {
   params.set('key', apiKey);
 
   const youtubeUrl = new URL(`https://www.googleapis.com/youtube/v3/${resource}`);
-  params.forEach((value, key) => {
-    youtubeUrl.searchParams.append(key, value);
-  });
+  youtubeUrl.search = params.toString();
 
   try {
     const response = await fetch(youtubeUrl.href, {
