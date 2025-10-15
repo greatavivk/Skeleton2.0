@@ -3,6 +3,9 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 dotenv.config();
 
@@ -13,6 +16,24 @@ const port = Number(process.env.PORT) || 3000;
 const pipedInstance = (process.env.PIPED_INSTANCE || 'https://piped.video').replace(/\/+$/, '');
 
 const allowedResources = new Set(['search', 'videos', 'channels', 'playlists']);
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const indexPath = path.resolve(currentDir, '..', 'index.html');
+let cachedIndexHtml;
+
+const loadIndexHtml = async () => {
+  try {
+    if (cachedIndexHtml) {
+      return cachedIndexHtml;
+    }
+
+    cachedIndexHtml = await readFile(indexPath, 'utf8');
+    return cachedIndexHtml;
+  } catch (error) {
+    cachedIndexHtml = undefined;
+    throw error;
+  }
+};
 
 const safeParams = {
   search: new Set([
@@ -122,8 +143,14 @@ app.use((req, res, next) => {
   return res.status(403).json({ error: 'Origin not allowed' });
 });
 
-app.get('/', (req, res) => {
-  res.send('ok');
+app.get('/', async (req, res, next) => {
+  try {
+    const html = await loadIndexHtml();
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/yt/:resource', async (req, res) => {
@@ -219,8 +246,19 @@ app.get('/api/piped/streams/:videoId', async (req, res) => {
   }
 });
 
-app.use((req, res) => {
+app.use((req, res, next) => {
+  if (res.headersSent) {
+    return next();
+  }
   res.status(404).json({ error: 'Not found' });
+});
+
+app.use((error, req, res, next) => {
+  console.error('Unhandled error', error);
+  if (res.headersSent) {
+    return next(error);
+  }
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(port, () => {

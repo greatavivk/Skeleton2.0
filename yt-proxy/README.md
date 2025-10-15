@@ -9,7 +9,7 @@ npm install
 YT_API_KEY=your-key-here node server.js
 ```
 
-By default the server listens on port `3000`. Configure `ALLOWED_ORIGIN` to restrict browser access and `PORT` to customize the listener port. Set `PIPED_INSTANCE` to point at an alternative [Piped](https://github.com/TeamPiped/Piped) deployment if you want to proxy video streams through a non-default host.
+By default the server listens on port `3000`. Configure `ALLOWED_ORIGIN` to restrict browser access and `PORT` to customize the listener port. Set `PIPED_INSTANCE` to point at an alternative [Piped](https://github.com/TeamPiped/Piped) deployment if you want to proxy video streams through a non-default host. When you deploy the proxy as a standalone service (for example on Render) it also serves the project root `index.html`, so the UI and API can live on the same host without additional static hosting.
 
 If you update dependencies, re-run `npm install` (or `npm install --package-lock-only`) so `package-lock.json` stays in sync for deployments.
 
