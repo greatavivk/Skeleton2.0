@@ -3,6 +3,9 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
+import http from 'http';
+import https from 'https';
+import { readFileSync } from 'fs';
 
 dotenv.config();
 
@@ -10,6 +13,11 @@ const app = express();
 const allowedOrigin = process.env.ALLOWED_ORIGIN;
 const apiKey = process.env.YT_API_KEY;
 const port = Number(process.env.PORT) || 3000;
+const requireTls = process.env.REQUIRE_TLS === 'true';
+const tlsKeyPath = process.env.TLS_KEY_FILE;
+const tlsCertPath = process.env.TLS_CERT_FILE;
+const tlsCaPath = process.env.TLS_CA_FILE;
+const serverTimeoutMs = Number(process.env.SERVER_TIMEOUT_MS) || 15000;
 
 const allowedResources = new Set(['search', 'videos', 'channels', 'playlists']);
 
@@ -91,8 +99,30 @@ const safeParams = {
   ])
 };
 
-app.use(helmet());
+app.disable('x-powered-by');
+
+const helmetMiddleware = helmet({
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+});
+
+app.use(helmetMiddleware);
 app.use(morgan('combined'));
+
+if (requireTls) {
+  app.enable('trust proxy');
+  app.use((req, res, next) => {
+    if (req.secure) {
+      return next();
+    }
+
+    const host = req.headers.host;
+    if (!host) {
+      return res.status(400).json({ error: 'HTTPS required' });
+    }
+
+    return res.redirect(301, `https://${host}${req.originalUrl}`);
+  });
+}
 
 app.use((req, res, next) => {
   if (!allowedOrigin) {
@@ -189,6 +219,45 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-app.listen(port, () => {
-  console.log(`YouTube proxy listening on port ${port}`);
+let server;
+
+const buildHttpsServer = () => {
+  if (!tlsKeyPath || !tlsCertPath) {
+    if (requireTls) {
+      console.error('REQUIRE_TLS is true but TLS_KEY_FILE or TLS_CERT_FILE is missing.');
+      process.exit(1);
+    }
+
+    return null;
+  }
+
+  try {
+    const httpsOptions = {
+      key: readFileSync(tlsKeyPath),
+      cert: readFileSync(tlsCertPath),
+      minVersion: 'TLSv1.2'
+    };
+
+    if (tlsCaPath) {
+      httpsOptions.ca = readFileSync(tlsCaPath);
+    }
+
+    return https.createServer(httpsOptions, app);
+  } catch (error) {
+    console.error('Failed to load TLS materials:', error.message);
+    process.exit(1);
+  }
+};
+
+server = buildHttpsServer();
+
+if (!server) {
+  server = http.createServer(app);
+}
+
+server.setTimeout(serverTimeoutMs);
+
+server.listen(port, () => {
+  const protocol = server instanceof https.Server ? 'https' : 'http';
+  console.log(`YouTube proxy listening on ${protocol.toUpperCase()} port ${port}`);
 });
