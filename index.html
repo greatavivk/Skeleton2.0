@@ -226,6 +226,7 @@
             border: none;
             border-radius: calc(var(--border-radius) - 4px);
             background: #000;
+            display: block;
         }
 
         .player-placeholder {
@@ -286,15 +287,16 @@
         </section>
 
         <section class="player-wrapper" aria-label="Video player">
-            <iframe
+            <video
                 id="player"
                 class="player-frame"
-                title="YouTube video player"
-                src=""
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowfullscreen>
-            </iframe>
-            <p class="player-placeholder" id="player-placeholder">Select a video above to start playback. The player supports fullscreen mode.</p>
+                preload="metadata"
+                controls
+                playsinline
+                tabindex="-1"
+                aria-label="Selected video playback">
+            </video>
+            <p class="player-placeholder" id="player-placeholder">Select a video above to start playback. The built-in player uses non-YouTube streams when available.</p>
         </section>
     </main>
 
@@ -307,8 +309,9 @@
             const searchButton = document.getElementById('search-button');
             const resultsContainer = document.getElementById('results');
             const statusDisplay = document.getElementById('status');
-            const playerFrame = document.getElementById('player');
+            const playerElement = document.getElementById('player');
             const playerPlaceholder = document.getElementById('player-placeholder');
+            const defaultPlaceholderText = playerPlaceholder.textContent;
 
             let sessionApiKey = '';
             let activeCard = null;
@@ -316,6 +319,19 @@
             const setStatus = (message, isError = false) => {
                 statusDisplay.textContent = message;
                 statusDisplay.classList.toggle('error', Boolean(isError));
+            };
+
+            const resetPlayer = () => {
+                try {
+                    playerElement.pause();
+                } catch (error) {
+                    // Ignore pause errors
+                }
+                playerElement.removeAttribute('src');
+                playerElement.load();
+                delete playerElement.dataset.videoId;
+                playerPlaceholder.hidden = false;
+                playerPlaceholder.textContent = defaultPlaceholderText;
             };
 
             const enableSearch = () => {
@@ -345,14 +361,121 @@
                 }
             };
 
-            const loadVideo = (videoId) => {
+            const fetchStreamInfo = async (videoId) => {
+                const providers = [
+                    `/api/piped/streams/${encodeURIComponent(videoId)}`,
+                    `https://piped.video/api/v1/streams/${encodeURIComponent(videoId)}`
+                ];
+
+                let lastError = null;
+
+                for (const endpoint of providers) {
+                    try {
+                        const response = await fetch(endpoint, {
+                            headers: { Accept: 'application/json' }
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`Stream provider responded with status ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data && typeof data === 'object') {
+                            return data;
+                        }
+
+                        throw new Error('Stream provider returned an unexpected payload.');
+                    } catch (error) {
+                        lastError = error;
+                    }
+                }
+
+                throw lastError || new Error('No stream providers are currently reachable.');
+            };
+
+            const selectStreamUrl = (info) => {
+                if (!info || typeof info !== 'object') {
+                    return '';
+                }
+
+                if (typeof info.hls === 'string' && info.hls.length > 0) {
+                    return info.hls;
+                }
+
+                const streams = Array.isArray(info.videoStreams) ? info.videoStreams : [];
+
+                const playable = streams
+                    .filter((stream) => {
+                        if (!stream || typeof stream !== 'object') {
+                            return false;
+                        }
+
+                        if (stream.videoOnly) {
+                            return false;
+                        }
+
+                        const mimeType = typeof stream.mimeType === 'string' ? stream.mimeType : '';
+                        return /video\/mp4/i.test(mimeType);
+                    })
+                    .map((stream) => {
+                        const qualityText = typeof stream.quality === 'string' ? stream.quality : '';
+                        const qualityMatch = qualityText.match(/(\d+)/);
+                        const qualityValue = qualityMatch ? Number(qualityMatch[1]) : 0;
+                        return { ...stream, __qualityValue: qualityValue };
+                    })
+                    .sort((a, b) => (b.__qualityValue || 0) - (a.__qualityValue || 0));
+
+                if (playable.length > 0 && typeof playable[0].url === 'string') {
+                    return playable[0].url;
+                }
+
+                return '';
+            };
+
+            const loadVideo = async (videoId, title = '') => {
                 if (!videoId) {
                     return;
                 }
-                playerFrame.src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?rel=0&autoplay=1`;
-                playerPlaceholder.hidden = true;
-                if (typeof playerFrame.focus === 'function') {
-                    playerFrame.focus({ preventScroll: true });
+
+                resetPlayer();
+
+                const displayTitle = title || 'selected video';
+                playerPlaceholder.hidden = false;
+                playerPlaceholder.textContent = 'Fetching a stream for the selected video…';
+                setStatus(`Loading stream for ${displayTitle}…`);
+
+                try {
+                    const streamInfo = await fetchStreamInfo(videoId);
+                    const streamUrl = selectStreamUrl(streamInfo);
+
+                    if (!streamUrl) {
+                        throw new Error('No compatible streams were returned for playback.');
+                    }
+
+                    playerElement.src = streamUrl;
+                    playerElement.dataset.videoId = videoId;
+                    playerPlaceholder.hidden = true;
+
+                    const playPromise = playerElement.play();
+                    if (playPromise && typeof playPromise.catch === 'function') {
+                        playPromise.catch(() => {
+                            // Autoplay may be blocked; user can press play manually.
+                        });
+                    }
+
+                    if (typeof playerElement.focus === 'function') {
+                        playerElement.focus({ preventScroll: true });
+                    }
+
+                    setStatus(`Now playing: ${displayTitle}`);
+                } catch (error) {
+                    resetPlayer();
+                    const youtubeUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+                    playerPlaceholder.hidden = false;
+                    playerPlaceholder.innerHTML = `Unable to load a privacy-friendly stream right now. <a href="${youtubeUrl}" target="_blank" rel="noopener noreferrer">Open this video on YouTube</a>.`;
+                    console.error(error);
+                    setStatus(error.message || 'Failed to load the selected video.', true);
                 }
             };
 
@@ -398,14 +521,13 @@
                 card.append(thumbnail, info);
 
                 card.addEventListener('click', () => {
-                    loadVideo(videoId);
+                    void loadVideo(videoId, snippet.title);
                     if (activeCard) {
                         activeCard.classList.remove('is-selected');
                     }
                     card.classList.add('is-selected');
                     activeCard = card;
-                    setStatus(`Now playing: ${snippet.title || 'Selected video'}`);
-                    playerFrame.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    playerElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 });
 
                 return card;

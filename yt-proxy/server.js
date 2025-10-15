@@ -10,6 +10,7 @@ const app = express();
 const allowedOrigin = process.env.ALLOWED_ORIGIN;
 const apiKey = process.env.YT_API_KEY;
 const port = Number(process.env.PORT) || 3000;
+const pipedInstance = (process.env.PIPED_INSTANCE || 'https://piped.video').replace(/\/+$/, '');
 
 const allowedResources = new Set(['search', 'videos', 'channels', 'playlists']);
 
@@ -182,6 +183,39 @@ app.get('/api/yt/:resource', async (req, res) => {
     res.status(response.status).json(data);
   } catch (error) {
     res.status(500).json({ error: 'Failed to reach YouTube API', details: error.message });
+  }
+});
+
+app.get('/api/piped/streams/:videoId', async (req, res) => {
+  const rawVideoId = typeof req.params.videoId === 'string' ? req.params.videoId.trim() : '';
+
+  if (!rawVideoId || !/^[a-zA-Z0-9_-]{6,}$/u.test(rawVideoId)) {
+    return res.status(400).json({ error: 'Invalid video identifier provided.' });
+  }
+
+  const upstreamUrl = `${pipedInstance}/api/v1/streams/${encodeURIComponent(rawVideoId)}`;
+
+  try {
+    const response = await fetch(upstreamUrl, {
+      headers: { Accept: 'application/json' }
+    });
+
+    const text = await response.text();
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      return res
+        .status(502)
+        .json({ error: 'Invalid JSON response from stream provider', details: parseError.message });
+    }
+
+    res.status(response.status).json(data);
+  } catch (error) {
+    res
+      .status(502)
+      .json({ error: 'Failed to reach stream provider', details: error.message });
   }
 });
 
